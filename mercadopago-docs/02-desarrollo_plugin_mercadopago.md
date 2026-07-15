@@ -436,3 +436,313 @@ Se verificó correctamente que:
 - Mercado Pago aparece junto a PayPal en la pantalla **Administración del sitio → General → Pagos → Cuentas para pago**.
 
 Con esta validación se considera finalizada la **Fase 1 – Esqueleto del plugin** y se da inicio a la **Fase 2 – Configuración del gateway**.
+
+# Fase 2 - Configuración del gateway
+
+## Objetivo
+
+Implementar y validar la configuración del gateway Mercado Pago para cada cuenta de pago de Moodle, utilizando exclusivamente el mecanismo estándar de configuración provisto por `core_payment`.
+
+---
+
+## Configuración implementada
+
+Se implementó la configuración por cuenta de pago con los siguientes parámetros:
+
+- Habilitar gateway.
+- Entorno.
+- Access Token.
+- Secreto del Webhook.
+
+No se incorporó configuración global del plugin, de acuerdo con la arquitectura aprobada.
+
+---
+
+## Ayuda contextual
+
+Se agregaron textos de ayuda para los tres parámetros configurables.
+
+### Entorno
+
+Describe la diferencia entre:
+
+- Sandbox
+- Producción
+
+### Access Token
+
+Indica que debe pegarse el Access Token correspondiente al entorno seleccionado y que constituye información confidencial.
+
+### Secreto del Webhook
+
+Describe que el valor será utilizado para validar la autenticidad de las notificaciones enviadas por Mercado Pago.
+
+Para implementar correctamente la ayuda contextual fue necesario agregar tanto las cadenas:
+
+```php
+$string['...']
+```
+
+como las correspondientes:
+
+```php
+$string['..._help']
+```
+
+ya que `addHelpButton()` utiliza ambas.
+
+---
+
+## Validaciones implementadas
+
+La configuración valida:
+
+### Access Token
+
+- obligatorio cuando el gateway está habilitado;
+- eliminación de espacios mediante `trim()`;
+- longitud mínima de 20 caracteres.
+
+### Webhook Secret
+
+- obligatorio cuando el gateway está habilitado;
+- eliminación de espacios mediante `trim()`;
+- longitud mínima de 16 caracteres.
+
+Las validaciones se implementaron dentro de:
+
+```
+classes/gateway.php
+```
+
+utilizando el método:
+
+```
+validate_gateway_form()
+```
+
+---
+
+## Pruebas realizadas
+
+Se verificó correctamente:
+
+- aparición del gateway en la configuración de la cuenta de pago;
+- visualización de los cuatro parámetros configurables;
+- funcionamiento de la ayuda contextual;
+- validación de campos obligatorios;
+- validación de longitud mínima;
+- almacenamiento correcto de la configuración;
+- recuperación correcta de la configuración al volver a abrir el formulario;
+- conservación del entorno seleccionado;
+- almacenamiento seguro de Access Token y Webhook Secret utilizando campos de tipo `passwordunmask`.
+
+---
+
+## Incidencia detectada
+
+Durante las pruebas, Moodle mostró mensajes del tipo:
+
+```
+[[webhooksecret_desc_help]]
+```
+
+y posteriormente:
+
+```
+[[webhooksecretinvalidlength]]
+```
+
+El problema no estaba en el código sino en la caché de idiomas de Moodle.
+
+La solución fue ejecutar:
+
+```
+Administración del sitio
+→ Desarrollo
+→ Purgar todas las cachés
+```
+
+Después de purgar la caché, Moodle reconoció correctamente las nuevas cadenas de idioma.
+
+---
+
+## Observaciones
+
+Durante el desarrollo se verificó que:
+
+- modificar archivos `lang/es` o `lang/en` requiere purgar la caché de Moodle antes de realizar nuevas pruebas;
+- `Ctrl + F5` únicamente recarga el navegador y no actualiza la caché de idiomas del servidor;
+- las validaciones definidas en `validate_gateway_form()` se ejecutan únicamente al presionar **Guardar cambios**;
+- los campos `passwordunmask` almacenan correctamente las credenciales y las muestran enmascaradas al volver a abrir el formulario.
+
+---
+
+## Estado
+
+Fase 2 finalizada.
+
+Resultado:
+
+- configuración completamente funcional;
+- validaciones implementadas;
+- ayuda contextual implementada;
+- persistencia de configuración verificada.
+
+La siguiente etapa será la **Fase 3 – Persistencia**, comenzando con la implementación del `transaction_repository`.
+
+# Fase 3 - Capa de persistencia
+
+## Objetivo
+
+Implementar la capa de persistencia del plugin mediante un repositorio dedicado, desacoplando completamente el acceso a la base de datos del resto de la lógica del sistema.
+
+La implementación sigue el patrón Repository definido en la arquitectura aprobada.
+
+---
+
+## Modelo de datos
+
+Se revisó la estructura de la tabla:
+
+```
+paygw_mercadopago_transactions
+```
+
+Se verificó que el modelo implementado coincide con la arquitectura aprobada.
+
+No fue necesario modificar:
+
+- campos;
+- claves primarias;
+- claves foráneas;
+- índices;
+- restricciones.
+
+La tabla quedó aprobada como modelo definitivo de persistencia.
+
+---
+
+## Implementación del Transaction Repository
+
+Se implementó:
+
+```
+classes/local/repository/transaction_repository.php
+```
+
+Este repositorio constituye el único punto de acceso a la tabla:
+
+```
+paygw_mercadopago_transactions
+```
+
+No contiene reglas de negocio.
+
+Toda su responsabilidad consiste exclusivamente en leer y escribir información en la base de datos.
+
+---
+
+## Métodos implementados
+
+Se implementaron los siguientes métodos públicos:
+
+- create()
+- find_by_id()
+- find_by_external_reference()
+- find_by_preference_id()
+- find_by_payment_id()
+- save_preference()
+- save_payment_reference()
+- update_status()
+- increment_attempts()
+- register_error()
+- mark_as_delivered()
+
+Además se implementó el método privado:
+
+- update_fields()
+
+para centralizar las actualizaciones parciales de registros.
+
+---
+
+## Criterios de diseño
+
+Durante el desarrollo se tomaron las siguientes decisiones:
+
+- toda operación sobre la tabla debe realizarse exclusivamente mediante el repositorio;
+- ningún otro componente accederá directamente a `$DB`;
+- los valores por defecto (`created`, `attempts`, `delivered`, fechas) se inicializan dentro del repositorio;
+- las actualizaciones parciales reutilizan un único método interno para evitar duplicación de código;
+- el repositorio no contiene lógica de negocio relacionada con Mercado Pago.
+
+---
+
+## Pruebas realizadas
+
+Se desarrolló un script temporal de prueba para validar el funcionamiento completo del repositorio contra la base de datos real.
+
+Durante las pruebas se verificó correctamente:
+
+- creación de transacciones;
+- búsqueda por ID;
+- búsqueda por External Reference;
+- búsqueda por Preference ID;
+- búsqueda por Payment ID;
+- almacenamiento de Preference ID;
+- almacenamiento de Payment ID;
+- actualización de estados;
+- incremento de intentos;
+- registro de errores;
+- marcado como entregado;
+- eliminación automática de la transacción temporal al finalizar la prueba.
+
+Todas las operaciones finalizaron correctamente.
+
+---
+
+## Incidencias detectadas
+
+Inicialmente Moodle no encontraba la clase:
+
+```
+paygw_mercadopago\local\repository\transaction_repository
+```
+
+La causa fue la caché de clases de Moodle.
+
+La solución consistió en ejecutar:
+
+```
+Administración del sitio
+→ Desarrollo
+→ Purgar todas las cachés
+```
+
+Después de purgar la caché, el autoload detectó correctamente la nueva clase.
+
+---
+
+## Scripts temporales
+
+Durante el desarrollo se utilizó un script administrativo temporal para validar el repositorio.
+
+Dicho archivo debe eliminarse antes de generar una versión pública del plugin.
+
+No forma parte de la implementación definitiva.
+
+---
+
+## Estado
+
+Fase 3 finalizada.
+
+Resultado:
+
+- modelo de persistencia validado;
+- repositorio implementado;
+- repositorio probado sobre la base de datos real;
+- capa de persistencia aprobada para ser utilizada por los servicios de negocio.
+
+La siguiente etapa será la **Fase 4 – Servicios**, comenzando por `payment_service`.
