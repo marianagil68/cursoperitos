@@ -745,4 +745,269 @@ Resultado:
 - repositorio probado sobre la base de datos real;
 - capa de persistencia aprobada para ser utilizada por los servicios de negocio.
 
+dev_repository_test.php es un script de apoyo al desarrollo. No forma parte del flujo normal del plugin y no debe ejecutarse desde procesos automáticos. Puede conservarse durante el desarrollo para verificar rápidamente la integridad del repositorio.
+
 La siguiente etapa será la **Fase 4 – Servicios**, comenzando por `payment_service`.
+
+# Fase 4 - Payment Service
+
+## Objetivo
+
+Implementar el servicio responsable de iniciar una operación de pago, coordinando la creación de la transacción local con la generación de la preferencia de Mercado Pago.
+
+---
+
+## Componentes implementados
+
+Se implementaron los siguientes componentes:
+
+- `classes/local/service/payment_service.php`
+- `classes/local/client/mercadopago_client.php`
+
+El `payment_service` coordina el inicio de la operación y delega toda la comunicación HTTP con Mercado Pago al `mercadopago_client`.
+
+---
+
+## Responsabilidades del payment_service
+
+El servicio implementa el siguiente flujo:
+
+1. Validar los datos recibidos.
+2. Generar un `externalreference` único (UUID v4).
+3. Crear la transacción mediante `transaction_repository`.
+4. Solicitar la creación de la preferencia al cliente de Mercado Pago.
+5. Guardar el `preferenceid`.
+6. Actualizar el estado de la transacción a `pending`.
+7. Devolver el `initpoint` para redireccionar al Checkout Pro.
+
+El servicio no realiza llamadas HTTP directamente ni contiene lógica de integración con Moodle distinta al inicio de la operación.
+
+---
+
+## Responsabilidades del mercadopago_client
+
+El cliente encapsula toda la comunicación con la API REST de Mercado Pago.
+
+Sus responsabilidades son:
+
+- crear preferencias de Checkout Pro;
+- consultar pagos;
+- enviar solicitudes HTTP utilizando la clase `curl` de Moodle;
+- interpretar las respuestas JSON;
+- devolver respuestas normalizadas al resto del plugin.
+
+---
+
+## Pruebas realizadas
+
+Se desarrolló un script administrativo temporal:
+
+```
+dev_payment_service_test.php
+```
+
+utilizando un cliente simulado para evitar llamadas reales a Mercado Pago.
+
+Se verificó correctamente:
+
+- creación de la transacción;
+- generación de `externalreference`;
+- creación de una preferencia simulada;
+- almacenamiento de `preferenceid`;
+- actualización del estado a `pending`;
+- devolución del `initpoint`.
+
+Posteriormente se simuló un error durante la creación de la preferencia.
+
+Se verificó correctamente:
+
+- propagación de la excepción;
+- registro del error mediante `register_error()`;
+- actualización del estado de la transacción a `error`;
+- almacenamiento del mensaje en `lasterror`.
+
+Las pruebas se realizaron sobre la base de datos real del plugin.
+
+---
+
+## Scripts temporales
+
+Durante el desarrollo se incorporó:
+
+```
+dev_payment_service_test.php
+```
+
+Este archivo es un script de apoyo al desarrollo.
+
+No forma parte del funcionamiento normal del plugin y deberá excluirse de una futura publicación oficial.
+
+---
+
+## Estado
+
+Fase 4 finalizada.
+
+Resultado:
+
+- `payment_service` implementado;
+- `mercadopago_client` implementado;
+- flujo exitoso validado;
+- manejo de errores validado;
+- integración con el repositorio verificada.
+
+La siguiente etapa será la implementación del flujo real de integración entre Moodle y Mercado Pago para iniciar el Checkout Pro.
+
+# Configuración de Mercado Pago Developers
+
+Durante la Fase 5 fue necesario configurar correctamente una aplicación de prueba en Mercado Pago para que el plugin pudiera crear preferencias de pago mediante la API.
+
+## 1. Ingresar a Mercado Pago Developers
+
+Ingresar con la misma cuenta de Mercado Pago utilizada para el desarrollo.
+
+https://www.mercadopago.com.ar/developers/
+
+## 2. Abrir la sección Integraciones
+
+En la barra superior seleccionar:
+
+```
+Integraciones
+```
+
+Si no existe una integración, crear una nueva aplicación.
+
+## 3. Obtener las credenciales de prueba
+
+Dentro de la integración ingresar a:
+
+```
+Credenciales de prueba
+```
+
+Copiar el valor:
+
+```
+Access Token
+```
+
+No utilizar la **Public Key**, ya que el backend del plugin necesita autenticarse mediante el Access Token.
+
+## 4. Configurar Moodle
+
+Ingresar como administrador:
+
+```
+Administración del sitio
+    → General
+        → Pagos
+            → Cuentas para pago
+```
+
+Editar la cuenta de Mercado Pago configurada para pruebas.
+
+Completar:
+
+- Access Token
+- Entorno: Sandbox
+
+Guardar los cambios.
+
+## 5. Configurar una inscripción paga
+
+Habilitar el plugin de inscripción por pago.
+
+Luego ingresar al curso:
+
+```
+Participantes
+    → Métodos de matriculación
+        → Añadir método
+            → Inscripción en pago
+```
+
+Configurar como mínimo:
+
+- Cuenta para pago: Cuenta de prueba de Mercado Pago
+- Tasa de inscripción: 100
+- Moneda: Peso argentino
+- Método habilitado
+
+Guardar.
+
+## 6. Verificación en la base de datos
+
+Se comprobó que Moodle creó correctamente la inscripción paga.
+
+Consulta utilizada:
+
+```sql
+SELECT id,
+       courseid,
+       enrol,
+       status,
+       cost,
+       currency
+FROM mdl_enrol
+WHERE enrol = 'fee'
+ORDER BY id DESC;
+```
+
+Resultado obtenido:
+
+| id | courseid | enrol | cost | currency |
+|----|---------:|--------|-----:|----------|
+| 4  | 2        | fee    | 100  | ARS      |
+
+## 7. Primer error encontrado
+
+Al intentar crear una preferencia se obtuvo:
+
+```
+HTTP 403
+At least one policy returned UNAUTHORIZED
+```
+
+### Causa
+
+El Access Token configurado en Moodle no tenía autorización para crear preferencias.
+
+### Solución
+
+Reemplazar el Access Token por el obtenido desde **Credenciales de prueba** de Mercado Pago Developers.
+
+## 8. Prueba exitosa
+
+Luego de actualizar el Access Token, el script de prueba devolvió correctamente:
+
+```text
+transactionid      => 10
+externalreference  => 038fc595-eb84-4aea-80e9-80b1e1257f26
+preferenceid       => 3544226421-1f8b4ac0-5df7-494b-85d3-011bd4b2d369
+initpoint          => https://sandbox.mercadopago.com.ar/checkout/...
+```
+
+## Resultado
+
+Se verificó exitosamente el flujo completo:
+
+```
+Moodle
+    ↓
+External API
+    ↓
+payment_service
+    ↓
+transaction_repository
+    ↓
+mercadopago_client
+    ↓
+Mercado Pago Sandbox
+    ↓
+Creación de Preference
+    ↓
+Obtención del Checkout Pro (Init Point)
+```
+
+Con esta prueba quedó validada la comunicación entre Moodle y la API de Mercado Pago, obteniendo una Preference real y la URL de Checkout Pro en el entorno Sandbox.
