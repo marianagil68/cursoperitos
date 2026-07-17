@@ -1011,3 +1011,473 @@ Obtención del Checkout Pro (Init Point)
 ```
 
 Con esta prueba quedó validada la comunicación entre Moodle y la API de Mercado Pago, obteniendo una Preference real y la URL de Checkout Pro en el entorno Sandbox.
+
+## Fase 6 – Recepción y validación del Webhook de Mercado Pago
+
+### Objetivo
+
+Implementar la infraestructura necesaria para recibir las notificaciones Webhook enviadas por Mercado Pago, validar su autenticidad mediante firma HMAC y dejar preparada la arquitectura para que, en la Fase 7, pueda confirmarse el pago y habilitar automáticamente el acceso al curso en Moodle.
+
+---
+
+## Decisiones de arquitectura
+
+Antes de comenzar la implementación se revisó nuevamente el diseño del Webhook para mantener una correcta separación de responsabilidades.
+
+Se adoptó la siguiente arquitectura:
+
+```text
+Mercado Pago
+        │
+        ▼
+webhook.php
+        │
+        ├── Lee HTTP
+        ├── Obtiene accountid
+        ├── Recupera webhooksecret
+        ├── Construye webhook_notification
+        ▼
+webhook_service
+        │
+        ▼
+webhook_signature_validator
+        │
+        ▼
+payment_confirmation_interface
+```
+
+Cada componente tiene una única responsabilidad:
+
+| Componente | Responsabilidad |
+|------------|-----------------|
+| webhook.php | Adaptar la petición HTTP al modelo interno del plugin |
+| webhook_notification | Representar únicamente la información recibida desde Mercado Pago |
+| webhook_service | Coordinar el procesamiento del Webhook |
+| webhook_signature_validator | Validar criptográficamente la firma |
+| payment_confirmation_interface | Definir el contrato para confirmar pagos (implementación en Fase 7) |
+
+---
+
+## Inclusión del accountid en la preferencia
+
+Durante la revisión de la arquitectura se detectó un problema importante.
+
+Para validar la firma del Webhook era necesario recuperar el `webhooksecret` correspondiente a la cuenta de pago utilizada para generar la preferencia.
+
+Como Moodle permite múltiples cuentas de pago, el endpoint debía conocer qué cuenta había originado la preferencia.
+
+Por este motivo se modificó:
+
+### classes/local/service/payment_service.php
+
+Se agregó:
+
+```php
+'accountid' => $accountid,
+```
+
+al crear la preferencia.
+
+Posteriormente se modificó:
+
+### classes/local/api/mercadopago_client.php
+
+La URL del Webhook pasó de:
+
+```php
+/payment/gateway/mercadopago/webhook.php
+```
+
+a:
+
+```php
+/payment/gateway/mercadopago/webhook.php?accountid=...
+```
+
+También se agregó `accountid` como dato obligatorio dentro de la validación de preferencias.
+
+---
+
+## Excepción específica para Webhooks
+
+Se creó:
+
+```text
+classes/local/exception/invalid_webhook_exception.php
+```
+
+Esta excepción permite diferenciar claramente:
+
+- errores provocados por una notificación inválida;
+- errores internos del servidor.
+
+---
+
+## DTO del Webhook
+
+Se creó:
+
+```text
+classes/local/dto/webhook_notification.php
+```
+
+Este DTO representa únicamente los datos enviados por Mercado Pago:
+
+- topic
+- paymentid
+- signature
+- requestid
+
+### Decisión arquitectónica
+
+Inicialmente el DTO incluía también el `webhooksecret`.
+
+Durante la revisión se decidió eliminarlo porque:
+
+- el secreto no forma parte de la notificación;
+- pertenece a la configuración interna del gateway;
+- debe recuperarse desde Moodle;
+- no corresponde mezclar datos externos con configuración interna.
+
+El DTO quedó representando exclusivamente el evento recibido desde Mercado Pago.
+
+---
+
+## Validador de firma
+
+Se implementó:
+
+```text
+classes/local/validation/webhook_signature_validator.php
+```
+
+Responsabilidades:
+
+- validar parámetros obligatorios;
+- interpretar el encabezado `X-Signature`;
+- extraer `ts`;
+- extraer `v1`;
+- construir el manifiesto oficial de Mercado Pago;
+- calcular el HMAC SHA-256;
+- comparar utilizando `hash_equals()`;
+- lanzar `invalid_webhook_exception` cuando corresponda.
+
+El manifiesto utilizado es:
+
+```text
+id:{paymentid};request-id:{requestid};ts:{timestamp};
+```
+
+---
+
+## Mejora del diseño del validador
+
+Inicialmente el validador recibía cuatro parámetros:
+
+- signature
+- requestid
+- paymentid
+- secret
+
+Durante la revisión arquitectónica se decidió simplificar su interfaz.
+
+Ahora recibe:
+
+```php
+validate(
+    webhook_notification $notification,
+    string $secret
+)
+```
+
+Esto reduce el acoplamiento y evita modificar la firma del método si Mercado Pago incorpora nuevos datos al algoritmo de validación.
+
+---
+
+## Interfaz para confirmar pagos
+
+Se creó:
+
+```text
+classes/local/service/payment_confirmation_interface.php
+```
+
+con el contrato:
+
+```php
+public function confirm(string $paymentid): void;
+```
+
+La implementación concreta quedará para la Fase 7.
+
+---
+
+## Servicio del Webhook
+
+Se implementó:
+
+```text
+classes/local/service/webhook_service.php
+```
+
+Responsabilidades:
+
+- verificar que el tópico recibido sea `payment`;
+- delegar la validación de la firma;
+- delegar la confirmación del pago.
+
+El servicio no conoce:
+
+- HTTP;
+- JSON;
+- variables GET;
+- encabezados;
+- configuración de Moodle.
+
+Toda esa responsabilidad quedó concentrada en `webhook.php`.
+
+---
+
+## Recuperación de la configuración del gateway
+
+Antes de implementar el endpoint se revisó la API oficial del subsistema de pagos de Moodle.
+
+En lugar de acceder directamente a la base de datos se decidió utilizar:
+
+```php
+core_payment\account_gateway
+```
+
+La configuración se obtiene mediante:
+
+```php
+account_gateway::get_record([
+    'accountid' => $accountid,
+    'gateway' => 'mercadopago',
+]);
+```
+
+Posteriormente:
+
+```php
+$gatewayconfig = $accountgateway->get_configuration();
+```
+
+De esta configuración se recupera el:
+
+```text
+webhooksecret
+```
+
+Esta solución utiliza exclusivamente la API oficial de Moodle y evita consultas manuales sobre la base de datos.
+
+---
+
+## Implementación de webhook.php
+
+Se creó el endpoint público:
+
+```text
+payment/gateway/mercadopago/webhook.php
+```
+
+Responsabilidades:
+
+1. cargar Moodle;
+2. leer la petición HTTP;
+3. obtener el `accountid`;
+4. recuperar la configuración del gateway;
+5. obtener el `webhooksecret`;
+6. leer JSON, GET y encabezados HTTP;
+7. construir `webhook_notification`;
+8. crear los servicios necesarios;
+9. ejecutar `webhook_service`;
+10. devolver el código HTTP correspondiente.
+
+El endpoint responde:
+
+| HTTP | Resultado |
+|------|-----------|
+| 200 | ok |
+| 400 | invalid_notification |
+| 500 | internal_error |
+
+---
+
+## Verificaciones realizadas
+
+Se verificó sintácticamente el endpoint mediante:
+
+```bash
+php -l webhook.php
+```
+
+Resultado:
+
+```text
+No syntax errors detected in webhook.php
+```
+
+Durante la validación apareció una advertencia de incompatibilidad entre la versión instalada de Xdebug y PHP.
+
+La advertencia no afecta el funcionamiento del plugin y quedó pendiente como una tarea independiente del desarrollo.
+
+---
+
+## Estado al finalizar la Fase 6
+
+Al finalizar esta fase quedó implementada toda la infraestructura del Webhook:
+
+- URL de notificación preparada.
+- Identificación de la cuenta de pago.
+- Recuperación segura del `webhooksecret`.
+- DTO para representar la notificación.
+- Validación criptográfica de firmas.
+- Servicio coordinador del Webhook.
+- Interfaz para la futura confirmación del pago.
+- Endpoint HTTP completo.
+- Arquitectura desacoplada y alineada con el subsistema de pagos de Moodle.
+
+Aún no se confirma el pago ni se entrega el curso.
+
+Esa funcionalidad será implementada completamente durante la **Fase 7** mediante `payment_confirmation_service`.
+
+# Fase 7 – Confirmación automática del pago e inscripción en el curso
+
+## Objetivo
+
+Completar el flujo de pago integrando la confirmación automática desde Mercado Pago con el sistema de pagos de Moodle, registrando el pago y entregando la orden correspondiente para matricular automáticamente al alumno en el curso adquirido.
+
+---
+
+## Componentes implementados
+
+### payment_confirmation_service
+
+Se implementó el servicio encargado de confirmar un pago consultando directamente la API de Mercado Pago a partir del `payment_id` recibido en el Webhook.
+
+Responsabilidades:
+
+- Consultar el pago mediante la API oficial de Mercado Pago.
+- Validar que el pago exista.
+- Obtener toda la información del pago.
+- Actualizar la transacción almacenada en el repositorio.
+- Registrar el `payment_id`.
+- Registrar el estado del pago.
+- Evitar reprocesar pagos ya entregados.
+
+---
+
+### webhook_service
+
+El servicio de Webhook quedó encargado de:
+
+- Procesar únicamente notificaciones del tipo `payment`.
+- Validar la estructura de la notificación recibida.
+- Delegar la confirmación del pago al `payment_confirmation_service`.
+
+Las notificaciones de tipo `merchant_order` son ignoradas, respondiendo HTTP 200 para evitar reintentos innecesarios por parte de Mercado Pago.
+
+---
+
+### Integración con Moodle
+
+Una vez confirmado el pago:
+
+1. Se registra el pago mediante:
+
+```php
+payment_helper::save_payment(...)
+```
+
+2. Se entrega la orden mediante:
+
+```php
+payment_helper::deliver_order(...)
+```
+
+La entrega de la orden realiza automáticamente la inscripción del alumno utilizando la infraestructura estándar de `core_payment` de Moodle.
+
+No fue necesario implementar lógica propia de matriculación.
+
+---
+
+## Flujo completo
+
+Alumno
+
+↓
+
+Selecciona Mercado Pago
+
+↓
+
+Checkout Pro
+
+↓
+
+Pago aprobado
+
+↓
+
+Webhook de Mercado Pago
+
+↓
+
+Consulta API Mercado Pago
+
+↓
+
+Confirmación del pago
+
+↓
+
+Registro del pago en Moodle
+
+↓
+
+Entrega de la orden
+
+↓
+
+Inscripción automática en el curso
+
+---
+
+## Pruebas realizadas
+
+Se realizaron pruebas completas utilizando credenciales Sandbox de Mercado Pago.
+
+Se verificó correctamente:
+
+- creación de preferencias;
+- redirección a Checkout Pro;
+- aprobación del pago;
+- recepción del Webhook;
+- consulta del pago mediante API;
+- actualización de la transacción;
+- registro del pago en Moodle;
+- entrega automática de la orden;
+- inscripción automática del alumno;
+- respuesta HTTP 200 del Webhook.
+
+---
+
+## Resultado
+
+Quedó implementado el flujo completo de compra de cursos mediante Mercado Pago utilizando Checkout Pro y la infraestructura nativa de pagos de Moodle.
+
+El alumno obtiene automáticamente acceso al curso inmediatamente después de que Mercado Pago confirma el pago.
+
+# Pendientes para la versión 1.0
+
+- Revisar la implementación de la validación HMAC de los Webhooks utilizando la implementación oficial de Mercado Pago o una equivalente.
+- Realizar pruebas completas de los estados:
+  - approved;
+  - pending;
+  - rejected;
+  - cancelled;
+  - refunded;
+  - chargeback.
+- Validar reintentos automáticos de Webhooks.
+- Ejecutar pruebas en entorno de producción antes de la publicación de la versión estable.
