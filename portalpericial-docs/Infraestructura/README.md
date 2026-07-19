@@ -154,3 +154,22 @@ Cada documento mantiene un único tema para evitar inconsistencias y facilitar s
 - Documentación oficial de PostgreSQL
 - Documentación oficial de pgAdmin
 - Documentación oficial de Moodle
+
+## Estado del proyecto
+
+Estado actual: Estable.
+
+Pruebas realizadas:
+
+- Desarrollo local.
+- Sandbox Mercado Pago.
+- Producción Mercado Pago.
+
+El flujo completo de pago fue validado exitosamente incluyendo:
+
+- generación de preferencias;
+- Checkout Pro;
+- recepción y validación del webhook;
+- confirmación del pago;
+- registro de la transacción;
+- matriculación automática del alumno.
