@@ -1469,6 +1469,18 @@ Quedó implementado el flujo completo de compra de cursos mediante Mercado Pago 
 
 El alumno obtiene automáticamente acceso al curso inmediatamente después de que Mercado Pago confirma el pago.
 
+## Incidencias durante la implementación
+
+### Lectura de parámetros del webhook
+
+Durante las pruebas se detectó que el uso de `optional_param()` para obtener algunos parámetros enviados por Mercado Pago modificaba la forma en que Moodle los interpretaba.
+
+Esto impedía reconstruir correctamente el manifiesto utilizado para validar la firma HMAC del webhook.
+
+Como solución, para esos parámetros específicos se reemplazó `optional_param()` por lectura directa de `$_GET`, manteniendo el resto del procesamiento mediante las APIs de Moodle.
+
+Esta modificación permitió validar correctamente la firma del webhook tanto en Sandbox como en Producción.
+
 # Pendientes para la versión 1.0
 
 - Revisar la implementación de la validación HMAC de los Webhooks utilizando la implementación oficial de Mercado Pago o una equivalente.
