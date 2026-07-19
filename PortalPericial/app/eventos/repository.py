@@ -15,7 +15,8 @@ class EventoRepository:
                 visibleweb,
                 activo,
                 fechacreacion,
-                fechaactualizacion
+                fechaactualizacion,
+                urlacceso
             FROM public.eventos
             ORDER BY fechainicio
         """
@@ -32,7 +33,8 @@ class EventoRepository:
                 descripcion,
                 fechainicio,
                 fechafin,
-                capacidad
+                capacidad,
+                urlacceso
             FROM public.eventos
             WHERE activo = TRUE
               AND visibleweb = TRUE
@@ -42,3 +44,25 @@ class EventoRepository:
 
         with Database() as db:
             return db.obtenertodos(sql)
+        
+    def obtenerporid(self, eventoid):
+        sql = """
+            SELECT
+                eventoid,
+                titulo,
+                slug,
+                descripcion,
+                fechainicio,
+                fechafin,
+                capacidad,
+                visibleweb,
+                activo,
+                fechacreacion,
+                fechaactualizacion,
+                urlacceso
+            FROM public.eventos
+            WHERE eventoid = %s
+        """
+
+        with Database() as db:
+            return db.obteneruno(sql, (eventoid,))        

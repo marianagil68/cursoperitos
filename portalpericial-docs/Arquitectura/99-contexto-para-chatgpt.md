@@ -83,19 +83,132 @@ No modificar decisiones ya aprobadas sin justificar el cambio.
 
 # Estado actual
 
-Actualmente se encuentra terminado:
+Actualmente se encuentra implementado y probado:
 
-- Entorno de desarrollo.
-- Configuración del servidor.
+## Infraestructura
+
+- Entorno de desarrollo completo.
 - PostgreSQL operativo.
-- Acceso SSH.
-- Túnel SSH.
+- Flask configurado.
+- psycopg funcionando.
+- Clase Database con context manager.
 - Conexión mediante DBeaver.
-- Estructura inicial del proyecto.
+- Git y GitHub configurados.
 
-El siguiente objetivo es comenzar la implementación del backend.
+## Arquitectura
 
----
+Se utiliza la arquitectura:
+
+Controller
+↓
+Service
+↓
+Repository
+↓
+Database
+↓
+PostgreSQL
+
+No se utiliza ORM.
+
+Todas las consultas SQL se escriben manualmente.
+
+## Backend
+
+Ya se encuentran implementados:
+
+- Personas.
+- Eventos.
+- Inscripciones.
+- Correos.
+
+Cada módulo mantiene la separación:
+
+controller.py
+service.py
+repository.py
+dto.py
+
+## Eventos
+
+Se implementaron:
+
+- obtenerTodos()
+- obtenerPublicosProximos()
+- obtenerPorId()
+
+Los eventos almacenan la URL de acceso (Zoom) que luego será enviada por correo al inscripto.
+
+## Correos
+
+Se implementó un módulo independiente para el envío de correos.
+
+Estructura:
+
+app/
+└── correos/
+    ├── controller.py
+    ├── dto.py
+    ├── repository.py
+    └── service.py
+
+Características:
+
+- SMTP mediante Ferozo.
+- Configuración desde .env.
+- Auditoría completa en PostgreSQL.
+- Registro de errores.
+- Manejo de intentos.
+- Estados:
+    - PENDIENTE
+    - ENVIADO
+    - ERROR
+
+El envío fue probado correctamente.
+
+## Tabla correos
+
+Existe la tabla:
+
+public.correos
+
+con auditoría completa de todos los envíos.
+
+La fecha de envío se registra mediante:
+
+CURRENT_TIMESTAMP
+
+desde PostgreSQL.
+
+## Pruebas realizadas
+
+Se verificó correctamente:
+
+- inserción del correo
+- envío SMTP
+- actualización de estado
+- almacenamiento de fecha de envío
+- incremento de intentos
+- recepción del correo
+
+## Próximo objetivo
+
+Comenzar la integración de la landing pública.
+
+Falta implementar:
+
+- sección "Charlas informativas gratuitas";
+- formulario de inscripción;
+- JavaScript con fetch();
+- integración con PersonaService;
+- creación automática de persona;
+- inscripción al evento;
+- envío del correo de confirmación;
+- redirección a gracias.html.
+
+Una vez finalizada esta integración deberá eliminarse el endpoint temporal:
+
+GET /correos/prueba
 
 # Estilo de código
 

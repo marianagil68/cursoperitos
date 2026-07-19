@@ -11,3 +11,6 @@ class EventoService:
 
     def obtenerpublicosproximos(self):
         return self.repository.obtenerpublicosproximos()
+    
+    def obtenerporid(self, eventoid):
+        return self.repository.obtenerporid(eventoid)
