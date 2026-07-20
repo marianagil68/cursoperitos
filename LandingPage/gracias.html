@@ -1,17 +1,55 @@
 <!doctype html>
-<html lang="es">
+<html lang="es-AR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Consulta enviada | Portal Pericial</title>
-  <link rel="stylesheet" href="css/styles.css">
+  <title>Gracias | Portal Pericial</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="assets/logo-color.png?v=20260719-7">
+  <style>
+    :root{--navy:#06172d;--navy2:#0b2c55;--gold:#d8a844;--white:#fff;--muted:#c8d2df}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:
+    radial-gradient(circle at 20% 20%,rgba(31,111,201,.28),transparent 34%),
+    radial-gradient(circle at 80% 80%,rgba(216,168,68,.16),transparent 30%),var(--navy);
+    font-family:Arial,Helvetica,sans-serif;color:white;padding:24px}
+    .card{width:min(760px,100%);text-align:center;border:1px solid rgba(216,168,68,.45);
+    background:rgba(8,31,59,.92);border-radius:24px;padding:38px;box-shadow:0 24px 80px rgba(0,0,0,.38)}
+    .logo{width:min(330px,80%);height:auto;margin-bottom:28px}.icon{width:74px;height:74px;border-radius:50%;
+    margin:0 auto 18px;display:grid;place-items:center;background:var(--gold);color:var(--navy);font-size:38px;font-weight:bold}
+    h1{font-size:clamp(30px,5vw,48px);margin:0 0 14px}p{color:var(--muted);font-size:18px;line-height:1.6}
+    .event{display:none;margin:22px auto;padding:18px;border-radius:14px;background:rgba(255,255,255,.07);color:white}
+    a{display:inline-block;margin-top:18px;padding:15px 26px;border-radius:10px;background:var(--gold);color:var(--navy);
+    text-decoration:none;font-weight:800}.small{font-size:14px;margin-top:24px}
+  </style>
 </head>
-<body style="min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#020d20,#06285b);padding:20px">
-  <main style="max-width:650px;text-align:center;background:white;border-radius:24px;padding:50px;box-shadow:0 25px 80px rgba(0,0,0,.35)">
-    <img src="assets/logo-portal-pericial.png" alt="Portal Pericial" style="width:290px;margin:0 auto 28px">
-    <h1 style="font-size:2.5rem;line-height:1.1;margin-bottom:15px">Consulta enviada</h1>
-    <p style="color:#66738a;font-size:1.1rem">Recibimos tu mensaje correctamente.</p>
-    <a class="btn btn-primary" href="index.html" style="margin-top:20px">Volver al inicio</a>
+<body>
+  <main class="card">
+    <img class="logo" src="assets/logo-white.png?v=20260719-7" alt="Portal Pericial">
+    <div class="icon">✓</div>
+    <h1 id="title">¡Gracias por comunicarte!</h1>
+    <p id="message">Recibimos tus datos correctamente.</p>
+    <div class="event" id="event-box"></div>
+    <p id="mail-note">También enviamos una confirmación a tu correo electrónico.</p>
+    <a href="https://curso.portalpericial.com.ar/">VOLVER AL CURSO</a>
+    <p class="small">Portal Pericial · Formando a los peritos del futuro.</p>
   </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const tipo = params.get('tipo');
+    const evento = params.get('evento');
+    if (tipo === 'charla') {
+      document.getElementById('title').textContent = '¡Tu lugar está reservado!';
+      document.getElementById('message').textContent = 'Registramos correctamente tu inscripción a la charla informativa gratuita.';
+      if (evento) {
+        const box = document.getElementById('event-box');
+        box.style.display = 'block';
+        box.textContent = decodeURIComponent(evento);
+      }
+      document.getElementById('mail-note').textContent = 'Te enviamos por correo la confirmación y los datos del encuentro elegido.';
+    } else if (tipo === 'consulta') {
+      document.getElementById('title').textContent = '¡Consulta enviada!';
+      document.getElementById('message').textContent = 'Recibimos tu mensaje y te responderemos a la brevedad.';
+    }
+  </script>
 </body>
 </html>
