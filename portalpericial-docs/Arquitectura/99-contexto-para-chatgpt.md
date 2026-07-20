@@ -121,6 +121,7 @@ Ya se encuentran implementados:
 - Eventos.
 - Inscripciones.
 - Correos.
+- Consultas.
 
 Cada módulo mantiene la separación:
 
@@ -191,24 +192,43 @@ Se verificó correctamente:
 - incremento de intentos
 - recepción del correo
 
+## Fase 8 finalizada
+
+La landing pública se encuentra integrada con Flask.
+
+Se implementó:
+
+- carga dinámica de charlas desde `GET /api/eventos`;
+- formulario de inscripción mediante `POST /api/inscripciones`;
+- creación o reutilización de personas por correo electrónico;
+- prevención de inscripciones duplicadas;
+- envío de confirmación con el enlace privado de Zoom;
+- formulario de consultas mediante `POST /api/consultas`;
+- aviso al administrador y acuse de recibo al participante;
+- auditoría completa de correos;
+- aviso visual cuando la persona ya estaba inscripta;
+- reenvío de confirmación mediante `POST /api/inscripciones/reenviar-correo`;
+- límite de cinco minutos entre reenvíos;
+- honeypot en formularios públicos;
+- CORS restringido al entorno local en modo `debug`;
+- eliminación del mecanismo PHP anterior.
+
+El endpoint `GET /correos/prueba` se conserva para pruebas manuales, pero solo funciona con `debug=True`. En producción responde `404`.
+
+La implementación y las pruebas se documentan en:
+
+```text
+08-fase-8-integracion-landing.md
+```
+
 ## Próximo objetivo
 
-Comenzar la integración de la landing pública.
+Preparar la puesta en producción:
 
-Falta implementar:
-
-- sección "Charlas informativas gratuitas";
-- formulario de inscripción;
-- JavaScript con fetch();
-- integración con PersonaService;
-- creación automática de persona;
-- inscripción al evento;
-- envío del correo de confirmación;
-- redirección a gracias.html.
-
-Una vez finalizada esta integración deberá eliminarse el endpoint temporal:
-
-GET /correos/prueba
+- desplegar Flask con Gunicorn;
+- configurar el reverse proxy `/api` en Nginx;
+- publicar la landing;
+- realizar una prueba completa sobre el dominio público.
 
 # Estilo de código
 
