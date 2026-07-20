@@ -16,6 +16,20 @@ class InscripcionEventoService:
         eventoid,
         observaciones=None
     ):
+        resultado = self.inscribirconresultado(
+            personaid,
+            eventoid,
+            observaciones
+        )
+
+        return resultado["inscripcioneventoid"]
+
+    def inscribirconresultado(
+        self,
+        personaid,
+        eventoid,
+        observaciones=None
+    ):
 
         inscripcion = self.repository.obtener(
             personaid,
@@ -23,14 +37,33 @@ class InscripcionEventoService:
         )
 
         if inscripcion is not None:
-            return inscripcion["inscripcioneventoid"]
+            return {
+                "inscripcioneventoid": inscripcion["inscripcioneventoid"],
+                "inscripcioncreada": False
+            }
 
-        return self.repository.insertar(
+        inscripcioneventoid = self.repository.insertar(
             personaid,
             eventoid,
             "INSCRIPTO",
             observaciones
         )
+
+        if inscripcioneventoid is not None:
+            return {
+                "inscripcioneventoid": inscripcioneventoid,
+                "inscripcioncreada": True
+            }
+
+        inscripcion = self.repository.obtener(
+            personaid,
+            eventoid
+        )
+
+        return {
+            "inscripcioneventoid": inscripcion["inscripcioneventoid"],
+            "inscripcioncreada": False
+        }
 
     def cambiarestado(
         self,

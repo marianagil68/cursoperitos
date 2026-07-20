@@ -51,6 +51,7 @@ class PersonaRepository:
                 %s,
                 %s
             )
+            ON CONFLICT DO NOTHING
             RETURNING personaid
         """
 
@@ -66,6 +67,9 @@ class PersonaRepository:
                     origen
                 )
             )
+
+        if fila is None:
+            return None
 
         return fila["personaid"]
 

@@ -7,16 +7,20 @@ eventosbp = Blueprint("eventos", __name__)
 service = EventoService()
 
 
-@eventosbp.route("/eventos", methods=["GET"])
+@eventosbp.route("/api/eventos", methods=["GET"])
 def obtenereventos():
     eventos = service.obtenerpublicosproximos()
+
     return jsonify(eventos)
 
-@eventosbp.route("/eventos/<int:eventoid>", methods=["GET"])
+
+@eventosbp.route("/api/eventos/<int:eventoid>", methods=["GET"])
 def obtenerevento(eventoid):
-    evento = service.obtenerporid(eventoid)
+    evento = service.obtenerpublicoporid(eventoid)
 
     if evento is None:
-        return jsonify({"error": "Evento no encontrado"}), 404
+        return jsonify({
+            "error": "Evento no encontrado."
+        }), 404
 
     return jsonify(evento)

@@ -36,6 +36,7 @@ class InscripcionEventoRepository:
                 %s,
                 %s
             )
+            ON CONFLICT (personaid, eventoid) DO NOTHING
             RETURNING inscripcioneventoid
         """
 
@@ -49,6 +50,9 @@ class InscripcionEventoRepository:
                     observaciones
                 )
             )
+
+        if fila is None:
+            return None
 
         return fila["inscripcioneventoid"]
 

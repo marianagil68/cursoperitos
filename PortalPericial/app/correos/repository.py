@@ -3,6 +3,79 @@ from app.config.database import Database
 
 class CorreoRepository:
 
+    def hayenviadoreciente(
+        self,
+        personaid,
+        eventoid,
+        destinatario,
+        asunto,
+        minutos
+    ):
+        sql = """
+            SELECT EXISTS
+            (
+                SELECT 1
+                FROM public.correos
+                WHERE personaid IS NOT DISTINCT FROM %s
+                  AND eventoid IS NOT DISTINCT FROM %s
+                  AND lower(destinatario) = lower(%s)
+                  AND asunto = %s
+                  AND estado IN ('PENDIENTE', 'ENVIADO')
+                  AND fechacreacion >= (
+                      CURRENT_TIMESTAMP - (%s * INTERVAL '1 minute')
+                  )
+            ) AS existe;
+        """
+
+        with Database() as db:
+            fila = db.obteneruno(
+                sql,
+                (
+                    personaid,
+                    eventoid,
+                    destinatario,
+                    asunto,
+                    minutos
+                )
+            )
+
+        return fila["existe"]
+
+    def obtenerenviado(
+        self,
+        personaid,
+        eventoid,
+        destinatario,
+        asunto
+    ):
+
+        sql = """
+            SELECT
+                correoid,
+                estado,
+                fechaenviosmtp,
+                messageid
+            FROM public.correos
+            WHERE personaid IS NOT DISTINCT FROM %s
+              AND eventoid IS NOT DISTINCT FROM %s
+              AND lower(destinatario) = lower(%s)
+              AND asunto = %s
+              AND estado = 'ENVIADO'
+            ORDER BY fechacreacion DESC
+            LIMIT 1;
+        """
+
+        with Database() as db:
+            return db.obteneruno(
+                sql,
+                (
+                    personaid,
+                    eventoid,
+                    destinatario,
+                    asunto
+                )
+            )
+
     def crear(
         self,
         personaid,

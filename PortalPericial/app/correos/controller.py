@@ -1,5 +1,9 @@
-from flask import Blueprint, jsonify
+from flask import abort
+from flask import Blueprint
+from flask import current_app
+from flask import jsonify
 
+from app.config.config import Config
 from app.correos.service import CorreoService
 
 
@@ -10,10 +14,13 @@ service = CorreoService()
 @correosbp.route("/correos/prueba", methods=["GET"])
 def correoprueba():
 
+    if not current_app.debug:
+        abort(404)
+
     correoid = service.enviar(
         personaid=1,
         eventoid=1,
-        destinatario="yerard30@gmail.com",
+        destinatario=Config.SMTP_DESTINATARIO_ADMIN,
         asunto="Prueba Portal Pericial",
         html="""
         <html>

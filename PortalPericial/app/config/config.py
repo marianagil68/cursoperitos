@@ -20,6 +20,10 @@ class Config:
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
     SMTP_REMITENTE = os.getenv("SMTP_REMITENTE")
     SMTP_NOMBRE = os.getenv("SMTP_NOMBRE", "Portal Pericial")
+    SMTP_DESTINATARIO_ADMIN = os.getenv(
+        "SMTP_DESTINATARIO_ADMIN",
+        SMTP_REMITENTE
+    )
 
     SMTP_USAR_TLS = (
         os.getenv("SMTP_USAR_TLS", "false").lower() == "true"

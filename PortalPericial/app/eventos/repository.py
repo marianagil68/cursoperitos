@@ -2,6 +2,7 @@ from app.config.database import Database
 
 
 class EventoRepository:
+
     def obtenertodos(self):
         sql = """
             SELECT
@@ -33,8 +34,7 @@ class EventoRepository:
                 descripcion,
                 fechainicio,
                 fechafin,
-                capacidad,
-                urlacceso
+                capacidad
             FROM public.eventos
             WHERE activo = TRUE
               AND visibleweb = TRUE
@@ -44,7 +44,27 @@ class EventoRepository:
 
         with Database() as db:
             return db.obtenertodos(sql)
-        
+
+    def obtenerpublicoporid(self, eventoid):
+        sql = """
+            SELECT
+                eventoid,
+                titulo,
+                slug,
+                descripcion,
+                fechainicio,
+                fechafin,
+                capacidad
+            FROM public.eventos
+            WHERE eventoid = %s
+              AND activo = TRUE
+              AND visibleweb = TRUE
+              AND fechainicio > CURRENT_TIMESTAMP
+        """
+
+        with Database() as db:
+            return db.obteneruno(sql, (eventoid,))
+
     def obtenerporid(self, eventoid):
         sql = """
             SELECT
@@ -65,4 +85,4 @@ class EventoRepository:
         """
 
         with Database() as db:
-            return db.obteneruno(sql, (eventoid,))        
+            return db.obteneruno(sql, (eventoid,))
