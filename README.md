@@ -121,7 +121,6 @@ MercadoPago: documenta puesta en producción
 Docs: reorganiza documentación de infraestructura
 ```
 
-## Autor
+## Autores
 
-**Mariana Gil**  
-Ingeniera en Sistemas de Información
+**Gerardo Petraglia y Mariana Gil**  
