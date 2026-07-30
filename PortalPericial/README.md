@@ -42,9 +42,9 @@ Para una charla el sábado a las 10:00, configurar en el servidor este `cron`
 para ejecutar la revisión todos los días a las 10:00:
 
 ```cron
-0 10 * * * cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && /ruta/al/venv/bin/flask --app run:app enviar-recordatorios >> /var/log/portalpericial-recordatorios.log 2>&1
+0 10 * * * /usr/bin/flock -n /home/portalpericial-curso/recordatorios.lock /bin/bash -c 'cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && exec .venv/bin/python -m flask --app run:app enviar-recordatorios' >> /home/portalpericial-curso/logs/recordatorios.log 2>&1
 ```
 
-El servidor debe tener la zona horaria `America/Argentina/Buenos_Aires`. Antes
-de instalar el `cron`, verificar la ruta real del entorno virtual con
-`which flask` mientras está activado.
+El cron pertenece al usuario `portalpericial-curso`. El servidor usa la zona
+horaria `America/Argentina/Buenos_Aires` y el servicio utiliza el entorno
+virtual `PortalPericial/.venv`.

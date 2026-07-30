@@ -192,13 +192,16 @@ Todos los comandos deben ejecutarse desde:
 cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial
 ```
 
-En los ejemplos, `/ruta/real/python` debe reemplazarse por el ejecutable Python
-del entorno virtual utilizado por el servicio.
+El servicio utiliza el ejecutable:
+
+```text
+/home/portalpericial-curso/apps/CursoPeritos/PortalPericial/.venv/bin/python
+```
 
 ### Simulación general
 
 ```bash
-/ruta/real/python -m flask --app run:app \
+.venv/bin/python -m flask --app run:app \
   enviar-recordatorios --simular
 ```
 
@@ -208,7 +211,7 @@ registra correos.
 ### Simulación de un evento
 
 ```bash
-/ruta/real/python -m flask --app run:app \
+.venv/bin/python -m flask --app run:app \
   enviar-recordatorios --evento-id 1 --simular
 ```
 
@@ -218,7 +221,7 @@ seleccionado.
 ### Correo controlado de prueba
 
 ```bash
-/ruta/real/python -m flask --app run:app \
+.venv/bin/python -m flask --app run:app \
   enviar-recordatorios \
   --evento-id 1 \
   --destinatario-prueba correo-controlado@ejemplo.com \
@@ -239,7 +242,7 @@ Este modo:
 ### Envío real
 
 ```bash
-/ruta/real/python -m flask --app run:app enviar-recordatorios
+.venv/bin/python -m flask --app run:app enviar-recordatorios
 ```
 
 Este comando puede enviar correos reales a todas las inscripciones activas de
@@ -351,10 +354,18 @@ El ejecutable que aparece en `ExecStart` permite identificar el entorno virtual.
 Para cron es preferible utilizar una ruta absoluta como:
 
 ```text
-/ruta/del/entorno/bin/python
+/home/portalpericial-curso/apps/CursoPeritos/PortalPericial/.venv/bin/python
 ```
 
 No se debe depender de que cron encuentre `python` o `flask` mediante `PATH`.
+
+En la instalación verificada:
+
+```text
+User=portalpericial-curso
+WorkingDirectory=/home/portalpericial-curso/apps/CursoPeritos/PortalPericial
+ExecStart=.../PortalPericial/.venv/bin/gunicorn
+```
 
 ---
 
@@ -363,20 +374,23 @@ No se debe depender de que cron encuentre `python` o `flask` mediante `PATH`.
 Editar el cron del usuario que ejecutará la tarea:
 
 ```bash
-crontab -e
+crontab -u portalpericial-curso -e
 ```
 
-Ejemplo para un servidor configurado con hora argentina:
+Línea instalada en el servidor configurado con hora argentina:
 
 ```cron
-0 10 * * * cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && /ruta/real/python -m flask --app run:app enviar-recordatorios >> /var/log/portalpericial-recordatorios.log 2>&1
+0 10 * * * /usr/bin/flock -n /home/portalpericial-curso/recordatorios.lock /bin/bash -c 'cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && exec .venv/bin/python -m flask --app run:app enviar-recordatorios' >> /home/portalpericial-curso/logs/recordatorios.log 2>&1
 ```
 
 Elementos de la línea:
 
 - `0 10 * * *`: horario;
+- `/usr/bin/flock -n`: evita ejecuciones simultáneas;
+- `recordatorios.lock`: archivo de exclusión de la tarea real;
+- `/bin/bash -c`: ejecuta el bloque de comandos;
 - `cd .../PortalPericial`: directorio desde el que se carga `.env`;
-- `/ruta/real/python`: Python del entorno virtual;
+- `.venv/bin/python`: Python del entorno virtual;
 - `-m flask --app run:app`: carga la aplicación;
 - `enviar-recordatorios`: ejecuta el proceso;
 - `>> archivo.log`: agrega la salida al log;
@@ -385,17 +399,59 @@ Elementos de la línea:
 Verificar la instalación:
 
 ```bash
-crontab -l
+crontab -u portalpericial-curso -l
 ```
 
-La ruta del log debe ser escribible por el usuario que ejecuta cron. Si el
-servicio utiliza un usuario sin permiso sobre `/var/log`, se debe elegir una
-ruta dentro de su directorio o configurar previamente el archivo y sus
-permisos.
+La ruta `/home/portalpericial-curso/logs` pertenece al usuario del servicio y
+es escribible por él.
 
 ---
 
-## 13. Lista de comprobación previa
+## 13. Probar la infraestructura de cron sin enviar
+
+Después de instalar la tarea, se puede validar el usuario, `flock`, el entorno
+virtual, PostgreSQL y el log mediante una simulación.
+
+La prueba utiliza archivos diferentes a los de la tarea real:
+
+```bash
+sudo -u portalpericial-curso /bin/bash -c \
+  "/usr/bin/flock -n /home/portalpericial-curso/recordatorios-prueba.lock \
+  /bin/bash -c 'cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && exec .venv/bin/python -m flask --app run:app enviar-recordatorios --evento-id 1 --simular' \
+  >> /home/portalpericial-curso/logs/recordatorios-prueba.log 2>&1"
+```
+
+Revisar el resumen:
+
+```bash
+tail -n 1 /home/portalpericial-curso/logs/recordatorios-prueba.log
+```
+
+El resultado esperado tiene cero envíos y cero errores:
+
+```text
+Eventos: 1 | Enviados: 0 | Simulados: N | Omitidos: 0 | Errores: 0
+```
+
+La simulación escribe nombres y direcciones en su log. Después de verificarla,
+eliminar únicamente los archivos temporales:
+
+```bash
+rm \
+  /home/portalpericial-curso/recordatorios-prueba.lock \
+  /home/portalpericial-curso/logs/recordatorios-prueba.log
+```
+
+No eliminar:
+
+```text
+/home/portalpericial-curso/recordatorios.lock
+/home/portalpericial-curso/logs/recordatorios.log
+```
+
+---
+
+## 14. Lista de comprobación previa
 
 Antes de activar cron:
 
@@ -410,15 +466,16 @@ Antes de activar cron:
 - [ ] Se confirmó la zona horaria.
 - [ ] Se confirmó el Python del entorno virtual.
 - [ ] Se confirmó que el usuario de cron puede escribir el log.
+- [ ] La prueba completa de cron con `--simular` termina sin errores.
 
 ---
 
-## 14. Operación y diagnóstico
+## 15. Operación y diagnóstico
 
 ### Ver la salida de cron
 
 ```bash
-tail -n 100 /var/log/portalpericial-recordatorios.log
+tail -n 100 /home/portalpericial-curso/logs/recordatorios.log
 ```
 
 ### Verificar el servicio
@@ -431,7 +488,7 @@ journalctl -u portalpericial-curso.service -n 100 --no-pager
 ### Verificar cron
 
 ```bash
-crontab -l
+crontab -u portalpericial-curso -l
 systemctl is-active cron
 ```
 
@@ -471,7 +528,7 @@ porque podría producir duplicados.
 
 ---
 
-## 15. Despliegue
+## 16. Despliegue
 
 Este cambio afecta solamente al backend. No requiere:
 
@@ -495,18 +552,18 @@ El procedimiento es:
 
 ---
 
-## 16. Retirar la automatización
+## 17. Retirar la automatización
 
 Para detener futuros envíos automáticos:
 
 ```bash
-crontab -e
+crontab -u portalpericial-curso -e
 ```
 
 Eliminar únicamente la línea de `enviar-recordatorios`, guardar y verificar:
 
 ```bash
-crontab -l
+crontab -u portalpericial-curso -l
 ```
 
 Quitar el cron no elimina inscripciones, eventos ni registros históricos de la
