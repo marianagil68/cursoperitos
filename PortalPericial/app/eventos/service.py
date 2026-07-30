@@ -9,6 +9,12 @@ class EventoService:
     def obtenertodos(self):
         return self.repository.obtenertodos()
 
+    def obtenerproximosentrehoras(self, desdehoras, hastahoras):
+        return self.repository.obtenerproximosentrehoras(
+            desdehoras,
+            hastahoras
+        )
+
     def obtenerpublicosproximos(self):
         eventos = self.repository.obtenerpublicosproximos()
 

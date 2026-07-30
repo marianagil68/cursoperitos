@@ -1,15 +1,68 @@
 import smtplib
+import re
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import make_msgid
 from html import escape
+from html.parser import HTMLParser
 from zoneinfo import ZoneInfo
 
 from app.config.config import Config
 from app.correos.repository import CorreoRepository
 from app.shared.exceptions import ErrorEnvioCorreo
 from app.shared.exceptions import ErrorReenvioReciente
+
+
+class ConversorHTMLATexto(HTMLParser):
+
+    ETIQUETAS_BLOQUE = {
+        "br",
+        "div",
+        "h1",
+        "h2",
+        "h3",
+        "li",
+        "p"
+    }
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.fragmentos = []
+        self.enlaces = []
+
+    def handle_starttag(self, etiqueta, atributos):
+        if etiqueta in self.ETIQUETAS_BLOQUE:
+            self.fragmentos.append("\n")
+
+        if etiqueta == "a":
+            self.enlaces.append(dict(atributos).get("href"))
+
+    def handle_endtag(self, etiqueta):
+        if etiqueta == "a":
+            enlace = self.enlaces.pop() if self.enlaces else None
+
+            if enlace:
+                self.fragmentos.append(f" ({enlace})")
+
+        if etiqueta in self.ETIQUETAS_BLOQUE:
+            self.fragmentos.append("\n")
+
+    def handle_data(self, contenido):
+        self.fragmentos.append(contenido)
+
+    def obtenertexto(self):
+        texto = "".join(self.fragmentos)
+        lineas = (
+            re.sub(r"[ \t]+", " ", linea).strip()
+            for linea in texto.splitlines()
+        )
+
+        return "\n".join(
+            linea
+            for linea in lineas
+            if linea
+        )
 
 
 class CorreoService:
@@ -28,6 +81,14 @@ class CorreoService:
 
     ASUNTO_REENVIO_CONFIRMACION_CHARLA = (
         "Reenvío: datos de acceso a la charla | Portal Pericial"
+    )
+
+    ASUNTO_RECORDATORIO_CHARLA = (
+        "Recordatorio: mañana es la charla | Portal Pericial"
+    )
+
+    ASUNTO_RECORDATORIO_PRUEBA = (
+        "PRUEBA - Recordatorio: mañana es la charla | Portal Pericial"
     )
 
     MINUTOS_ENTRE_REENVIOS = 5
@@ -54,7 +115,9 @@ class CorreoService:
         )
 
         mensaje = MIMEMultipart("alternative")
-        messageid = make_msgid()
+        messageid = make_msgid(
+            domain=self._obtenerdominioremitente()
+        )
 
         mensaje["From"] = (
             f"{Config.SMTP_NOMBRE} <{Config.SMTP_REMITENTE}>"
@@ -66,6 +129,13 @@ class CorreoService:
         if replyto:
             mensaje["Reply-To"] = replyto
 
+        mensaje.attach(
+            MIMEText(
+                self._convertirhtmlatexto(html),
+                "plain",
+                "utf-8"
+            )
+        )
         mensaje.attach(
             MIMEText(html, "html", "utf-8")
         )
@@ -194,6 +264,56 @@ class CorreoService:
             )
         )
 
+    def enviarrecordatoriocharla(self, persona, evento):
+        eventoid = evento["eventoid"]
+        destinatario = persona["email"]
+        asunto = self.ASUNTO_RECORDATORIO_CHARLA
+
+        if self._fueenviado(
+            persona["personaid"],
+            eventoid,
+            destinatario,
+            asunto
+        ):
+            return {
+                "correoenviado": False,
+                "motivo": "YA_ENVIADO"
+            }
+
+        resultado = self.enviar(
+            personaid=persona["personaid"],
+            eventoid=eventoid,
+            destinatario=destinatario,
+            asunto=asunto,
+            html=self._crearhtmlrecordatoriocharla(
+                persona,
+                evento
+            )
+        )
+
+        return {
+            "correoenviado": True,
+            **resultado
+        }
+
+    def enviarrecordatorioprueba(
+        self,
+        persona,
+        evento,
+        destinatario
+    ):
+        return self.enviar(
+            personaid=None,
+            eventoid=evento["eventoid"],
+            destinatario=destinatario,
+            asunto=self.ASUNTO_RECORDATORIO_PRUEBA,
+            html=self._crearhtmlrecordatoriocharla(
+                persona,
+                evento,
+                esprueba=True
+            )
+        )
+
     def enviarcorreosconsulta(self, persona, consulta):
         destinatario = persona["email"]
         asuntoadmin = (
@@ -236,6 +356,24 @@ class CorreoService:
         )
 
         return correo is not None
+
+    def _obtenerdominioremitente(self):
+        remitente = Config.SMTP_REMITENTE or ""
+        partes = remitente.rsplit("@", 1)
+
+        if len(partes) != 2 or not partes[1]:
+            raise ErrorEnvioCorreo(
+                "El remitente SMTP no tiene un dominio válido."
+            )
+
+        return partes[1].lower()
+
+    def _convertirhtmlatexto(self, html):
+        conversor = ConversorHTMLATexto()
+        conversor.feed(html)
+        conversor.close()
+
+        return conversor.obtenertexto()
 
     def _crearhtmlavisoreserva(self, persona, evento):
         fecha = self._formatearfecha(evento["fechainicio"])
@@ -280,6 +418,54 @@ class CorreoService:
                         <a href="{urlacceso}" style="display:inline-block;background:#0b63ce;color:white;text-decoration:none;padding:14px 24px;border-radius:9px;font-weight:bold">INGRESAR A LA CHARLA POR ZOOM</a>
                     </p>
                     <p>Guardá este mensaje para acceder al encuentro.</p>
+                    <p style="margin-top:28px">Equipo de <b>Portal Pericial</b></p>
+                </div>
+            </div>
+        """
+
+    def _crearhtmlrecordatoriocharla(
+        self,
+        persona,
+        evento,
+        esprueba=False
+    ):
+        fecha = self._formatearfecha(evento["fechainicio"])
+        urlacceso = evento.get("urlacceso")
+
+        if not isinstance(urlacceso, str) or not urlacceso.strip():
+            raise ErrorEnvioCorreo(
+                "La charla no tiene configurado un enlace de acceso."
+            )
+
+        urlacceso = escape(urlacceso.strip(), quote=True)
+        avisoprueba = ""
+
+        if esprueba:
+            avisoprueba = """
+                <div style="background:#fff3cd;color:#664d03;border:1px solid #ffecb5;padding:12px;margin-bottom:20px;text-align:center">
+                    <b>MENSAJE DE PRUEBA</b><br>
+                    Este correo no fue enviado a los participantes.
+                </div>
+            """
+
+        return f"""
+            <div style="font-family:Arial,sans-serif;color:#10213d;max-width:680px;margin:auto;border:1px solid #dce3ec;border-radius:14px;overflow:hidden">
+                <div style="background:#071a33;color:white;padding:26px;text-align:center">
+                    <h1 style="margin:0;font-size:25px">¡Mañana nos encontramos!</h1>
+                </div>
+                <div style="padding:28px">
+                    {avisoprueba}
+                    <p>Hola <b>{escape(persona['nombre'])}</b>,</p>
+                    <p>Te recordamos que mañana es la charla informativa gratuita de Portal Pericial.</p>
+                    <div style="background:#f4f7fb;border-left:5px solid #d5a742;padding:18px;margin:20px 0">
+                        <b>Encuentro:</b> {escape(evento['titulo'])}<br>
+                        <b>Fecha:</b> {escape(fecha)}<br>
+                        <b>Modalidad:</b> Online por Zoom
+                    </div>
+                    <p style="text-align:center;margin:28px 0">
+                        <a href="{urlacceso}" style="display:inline-block;background:#0b63ce;color:white;text-decoration:none;padding:14px 24px;border-radius:9px;font-weight:bold">INGRESAR A LA CHARLA POR ZOOM</a>
+                    </p>
+                    <p>Te recomendamos conectarte unos minutos antes. Guardá este mensaje para tener el enlace a mano.</p>
                     <p style="margin-top:28px">Equipo de <b>Portal Pericial</b></p>
                 </div>
             </div>

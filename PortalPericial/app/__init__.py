@@ -6,6 +6,7 @@ from app.eventos.controller import eventosbp
 from app.personas.controller import personasbp
 from app.inscripciones.controller import inscripcionesbp
 from app.correos.controller import correosbp
+from app.correos.commands import registrarcomandos
 
 def createapp():
     app = Flask(__name__)
@@ -33,5 +34,6 @@ def createapp():
     app.register_blueprint(inscripcionesbp)
     app.register_blueprint(correosbp)
     app.register_blueprint(consultasbp)
+    registrarcomandos(app)
     
     return app
