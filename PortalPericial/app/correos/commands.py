@@ -28,17 +28,22 @@ def validaremailprueba(contexto, parametro, valor):
 
 @click.command("enviar-recordatorios")
 @click.option(
+    "--anticipacion",
+    type=click.Choice(("un-dia", "una-hora")),
+    default="un-dia",
+    show_default=True,
+    help="Momento del recordatorio."
+)
+@click.option(
     "--desde-horas",
     type=click.FloatRange(min=0),
-    default=23.5,
-    show_default=True,
+    default=None,
     help="Inicio de la ventana previa al evento."
 )
 @click.option(
     "--hasta-horas",
     type=click.FloatRange(min=0),
-    default=24.5,
-    show_default=True,
+    default=None,
     help="Fin de la ventana previa al evento."
 )
 @click.option(
@@ -61,6 +66,7 @@ def validaremailprueba(contexto, parametro, valor):
     help="Nombre utilizado en el saludo del correo de prueba."
 )
 def enviarrecordatorios(
+    anticipacion,
     desde_horas,
     hasta_horas,
     simular,
@@ -68,7 +74,23 @@ def enviarrecordatorios(
     evento_id,
     nombre_prueba
 ):
-    """Envía una vez el recordatorio de eventos que comienzan en 24 horas."""
+    """Envía una vez el recordatorio correspondiente a cada evento."""
+    ventanas = {
+        "un-dia": (23.5, 24.5),
+        "una-hora": (0.5, 1.5)
+    }
+    ventanapredeterminada = ventanas[anticipacion]
+    desde_horas = (
+        ventanapredeterminada[0]
+        if desde_horas is None
+        else desde_horas
+    )
+    hasta_horas = (
+        ventanapredeterminada[1]
+        if hasta_horas is None
+        else hasta_horas
+    )
+
     if desde_horas >= hasta_horas:
         raise click.UsageError(
             "--desde-horas debe ser menor que --hasta-horas."
@@ -109,6 +131,8 @@ def enviarrecordatorios(
 
     if simular:
         click.echo("SIMULACIÓN: no se enviarán correos.\n")
+
+    click.echo(f"Anticipación: {anticipacion}\n")
 
     if destinatario_prueba:
         click.echo(
@@ -154,7 +178,8 @@ def enviarrecordatorios(
                 correoservice.enviarrecordatorioprueba(
                     personaprueba,
                     evento,
-                    destinatario_prueba
+                    destinatario_prueba,
+                    anticipacion
                 )
                 enviados += 1
             except Exception:
@@ -171,7 +196,8 @@ def enviarrecordatorios(
             try:
                 resultado = correoservice.enviarrecordatoriocharla(
                     persona,
-                    evento
+                    evento,
+                    anticipacion
                 )
 
                 if resultado["correoenviado"]:

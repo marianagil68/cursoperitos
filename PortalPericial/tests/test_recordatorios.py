@@ -108,6 +108,11 @@ def test_comando_envia_a_inscripciones_activas(monkeypatch):
         24.5
     )
     assert correoservice.enviarrecordatoriocharla.call_count == 2
+    correoservice.enviarrecordatoriocharla.assert_any_call(
+        personas[0],
+        evento,
+        "un-dia"
+    )
 
 
 def test_comando_simula_sin_enviar(monkeypatch):
@@ -203,7 +208,8 @@ def test_comando_envia_una_prueba_por_evento(monkeypatch):
             "nombre": "Mariana"
         },
         evento,
-        "propietaria@example.com"
+        "propietaria@example.com",
+        "un-dia"
     )
     correoservice.enviarrecordatoriocharla.assert_not_called()
 
@@ -378,3 +384,111 @@ def test_envio_incluye_texto_plano_y_messageid_del_dominio(monkeypatch):
     assert "Mañana nos encontramos" in textoplano
     assert "https://zoom.example.com/reunion" in textoplano
     servicio.repository.marcarenviado.assert_called_once()
+
+
+def test_comando_una_hora_utiliza_ventana_correspondiente(monkeypatch):
+    eventoservice = Mock()
+    inscripcionesrepository = Mock()
+    correoservice = Mock()
+    eventoservice.obtenerproximosentrehoras.return_value = []
+
+    monkeypatch.setattr(
+        "app.correos.commands.EventoService",
+        Mock(return_value=eventoservice)
+    )
+    monkeypatch.setattr(
+        "app.correos.commands.InscripcionEventoRepository",
+        Mock(return_value=inscripcionesrepository)
+    )
+    monkeypatch.setattr(
+        "app.correos.commands.CorreoService",
+        Mock(return_value=correoservice)
+    )
+
+    runner = createapp().test_cli_runner()
+    resultado = runner.invoke(args=[
+        "enviar-recordatorios",
+        "--anticipacion",
+        "una-hora"
+    ])
+
+    assert resultado.exit_code == 0
+    assert "Anticipación: una-hora" in resultado.output
+    eventoservice.obtenerproximosentrehoras.assert_called_once_with(
+        0.5,
+        1.5
+    )
+
+
+def test_recordatorio_una_hora_tiene_asunto_y_texto_propios():
+    servicio = CorreoService()
+    servicio.repository = Mock()
+    servicio.repository.obtenerenviado.return_value = None
+    servicio.enviar = Mock(return_value={
+        "correoid": 60,
+        "estado": "ENVIADO"
+    })
+    persona = {
+        "personaid": 9,
+        "nombre": "Mariana",
+        "email": "mariana@example.com"
+    }
+    evento = {
+        "eventoid": 1,
+        "titulo": "Charla de prueba",
+        "fechainicio": datetime(2026, 8, 1, 13, tzinfo=timezone.utc),
+        "urlacceso": "https://zoom.example.com/reunion"
+    }
+
+    resultado = servicio.enviarrecordatoriocharla(
+        persona,
+        evento,
+        "una-hora"
+    )
+
+    assert resultado["correoenviado"] is True
+    assert (
+        servicio.enviar.call_args.kwargs["asunto"]
+        == servicio.ASUNTO_RECORDATORIO_UNA_HORA
+    )
+    html = servicio.enviar.call_args.kwargs["html"]
+    assert "En una hora comenzamos" in html
+    assert "en una hora comienza la charla" in html
+    assert "https://zoom.example.com/reunion" in html
+
+
+def test_recordatorio_una_hora_no_se_confunde_con_el_del_dia_anterior():
+    servicio = CorreoService()
+    servicio.repository = Mock()
+    servicio.enviar = Mock(return_value={
+        "correoid": 61,
+        "estado": "ENVIADO"
+    })
+    persona = {
+        "personaid": 9,
+        "nombre": "Mariana",
+        "email": "mariana@example.com"
+    }
+    evento = {
+        "eventoid": 1,
+        "titulo": "Charla de prueba",
+        "fechainicio": datetime(2026, 8, 1, 13, tzinfo=timezone.utc),
+        "urlacceso": "https://zoom.example.com/reunion"
+    }
+
+    def obtenerenviado(personaid, eventoid, destinatario, asunto):
+        if asunto == servicio.ASUNTO_RECORDATORIO_UN_DIA:
+            return {"correoid": 31, "estado": "ENVIADO"}
+
+        return None
+
+    servicio.repository.obtenerenviado.side_effect = obtenerenviado
+
+    resultado = servicio.enviarrecordatoriocharla(
+        persona,
+        evento,
+        "una-hora"
+    )
+
+    assert resultado["correoenviado"] is True
+    servicio.enviar.assert_called_once()

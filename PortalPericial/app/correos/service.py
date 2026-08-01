@@ -83,12 +83,12 @@ class CorreoService:
         "Reenvío: datos de acceso a la charla | Portal Pericial"
     )
 
-    ASUNTO_RECORDATORIO_CHARLA = (
+    ASUNTO_RECORDATORIO_UN_DIA = (
         "Recordatorio: mañana es la charla | Portal Pericial"
     )
 
-    ASUNTO_RECORDATORIO_PRUEBA = (
-        "PRUEBA - Recordatorio: mañana es la charla | Portal Pericial"
+    ASUNTO_RECORDATORIO_UNA_HORA = (
+        "En una hora comienza la charla | Portal Pericial"
     )
 
     MINUTOS_ENTRE_REENVIOS = 5
@@ -264,10 +264,18 @@ class CorreoService:
             )
         )
 
-    def enviarrecordatoriocharla(self, persona, evento):
+    def enviarrecordatoriocharla(
+        self,
+        persona,
+        evento,
+        anticipacion="un-dia"
+    ):
         eventoid = evento["eventoid"]
         destinatario = persona["email"]
-        asunto = self.ASUNTO_RECORDATORIO_CHARLA
+        configuracion = self._obtenerconfiguracionrecordatorio(
+            anticipacion
+        )
+        asunto = configuracion["asunto"]
 
         if self._fueenviado(
             persona["personaid"],
@@ -287,7 +295,8 @@ class CorreoService:
             asunto=asunto,
             html=self._crearhtmlrecordatoriocharla(
                 persona,
-                evento
+                evento,
+                anticipacion=anticipacion
             )
         )
 
@@ -300,17 +309,23 @@ class CorreoService:
         self,
         persona,
         evento,
-        destinatario
+        destinatario,
+        anticipacion="un-dia"
     ):
+        configuracion = self._obtenerconfiguracionrecordatorio(
+            anticipacion
+        )
+
         return self.enviar(
             personaid=None,
             eventoid=evento["eventoid"],
             destinatario=destinatario,
-            asunto=self.ASUNTO_RECORDATORIO_PRUEBA,
+            asunto=f"PRUEBA - {configuracion['asunto']}",
             html=self._crearhtmlrecordatoriocharla(
                 persona,
                 evento,
-                esprueba=True
+                esprueba=True,
+                anticipacion=anticipacion
             )
         )
 
@@ -427,8 +442,12 @@ class CorreoService:
         self,
         persona,
         evento,
-        esprueba=False
+        esprueba=False,
+        anticipacion="un-dia"
     ):
+        configuracion = self._obtenerconfiguracionrecordatorio(
+            anticipacion
+        )
         fecha = self._formatearfecha(evento["fechainicio"])
         urlacceso = evento.get("urlacceso")
 
@@ -451,12 +470,12 @@ class CorreoService:
         return f"""
             <div style="font-family:Arial,sans-serif;color:#10213d;max-width:680px;margin:auto;border:1px solid #dce3ec;border-radius:14px;overflow:hidden">
                 <div style="background:#071a33;color:white;padding:26px;text-align:center">
-                    <h1 style="margin:0;font-size:25px">¡Mañana nos encontramos!</h1>
+                    <h1 style="margin:0;font-size:25px">{configuracion['titulo']}</h1>
                 </div>
                 <div style="padding:28px">
                     {avisoprueba}
                     <p>Hola <b>{escape(persona['nombre'])}</b>,</p>
-                    <p>Te recordamos que mañana es la charla informativa gratuita de Portal Pericial.</p>
+                    <p>{configuracion['introduccion']}</p>
                     <div style="background:#f4f7fb;border-left:5px solid #d5a742;padding:18px;margin:20px 0">
                         <b>Encuentro:</b> {escape(evento['titulo'])}<br>
                         <b>Fecha:</b> {escape(fecha)}<br>
@@ -465,11 +484,44 @@ class CorreoService:
                     <p style="text-align:center;margin:28px 0">
                         <a href="{urlacceso}" style="display:inline-block;background:#0b63ce;color:white;text-decoration:none;padding:14px 24px;border-radius:9px;font-weight:bold">INGRESAR A LA CHARLA POR ZOOM</a>
                     </p>
-                    <p>Te recomendamos conectarte unos minutos antes. Guardá este mensaje para tener el enlace a mano.</p>
+                    <p>{configuracion['cierre']}</p>
                     <p style="margin-top:28px">Equipo de <b>Portal Pericial</b></p>
                 </div>
             </div>
         """
+
+    def _obtenerconfiguracionrecordatorio(self, anticipacion):
+        configuraciones = {
+            "un-dia": {
+                "asunto": self.ASUNTO_RECORDATORIO_UN_DIA,
+                "titulo": "¡Mañana nos encontramos!",
+                "introduccion": (
+                    "Te recordamos que mañana es la charla informativa "
+                    "gratuita de Portal Pericial."
+                ),
+                "cierre": (
+                    "Te recomendamos conectarte unos minutos antes. "
+                    "Guardá este mensaje para tener el enlace a mano."
+                )
+            },
+            "una-hora": {
+                "asunto": self.ASUNTO_RECORDATORIO_UNA_HORA,
+                "titulo": "¡En una hora comenzamos!",
+                "introduccion": (
+                    "Te recordamos que en una hora comienza la charla "
+                    "informativa gratuita de Portal Pericial."
+                ),
+                "cierre": (
+                    "Tené el enlace a mano y conectate unos minutos "
+                    "antes del comienzo."
+                )
+            }
+        }
+
+        if anticipacion not in configuraciones:
+            raise ValueError("Anticipación de recordatorio desconocida.")
+
+        return configuraciones[anticipacion]
 
     def _crearhtmlavisoconsulta(self, persona, consulta):
         consultasegura = escape(consulta).replace("\n", "<br>")

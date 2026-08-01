@@ -2,8 +2,10 @@
 
 ## 1. Objetivo
 
-El sistema envía un recordatorio individual a las personas inscriptas
-aproximadamente 24 horas antes de una charla.
+El sistema envía dos recordatorios individuales a las personas inscriptas:
+
+- aproximadamente 24 horas antes de una charla;
+- aproximadamente una hora antes de una charla.
 
 El mensaje incluye:
 
@@ -31,7 +33,7 @@ cron
 comando Flask enviar-recordatorios
   |
   v
-eventos que comienzan dentro de aproximadamente 24 horas
+eventos dentro de la ventana de anticipación elegida
   |
   v
 personas con inscripción activa
@@ -138,6 +140,28 @@ Los parámetros se mantienen separados del texto SQL para que Psycopg haga la
 conversión correctamente y para evitar concatenar valores dentro de la
 consulta.
 
+### Ventana de una hora
+
+Al ejecutar:
+
+```bash
+.venv/bin/python -m flask --app run:app \
+  enviar-recordatorios --anticipacion una-hora
+```
+
+los valores predeterminados son:
+
+```text
+desdehoras = 0.5
+hastahoras = 1.5
+```
+
+Si el comando se ejecuta a las 09:00, busca eventos que comiencen entre las
+09:30 y las 10:30. Por lo tanto, encuentra una charla de las 10:00.
+
+El valor predeterminado de `--anticipacion` es `un-dia`, de modo que el comando
+y el cron existentes conservan su comportamiento.
+
 ---
 
 ## 5. Control de duplicados
@@ -152,6 +176,16 @@ Antes de enviar, el servicio consulta la tabla `correos` utilizando:
 
 Si ya existe un recordatorio enviado con esa combinación, la persona se
 contabiliza como omitida y no recibe otro.
+
+Los recordatorios utilizan asuntos diferentes:
+
+```text
+Recordatorio: mañana es la charla | Portal Pericial
+En una hora comienza la charla | Portal Pericial
+```
+
+Por eso, el recordatorio enviado el día anterior no impide el recordatorio de
+una hora. Cada tipo mantiene su propio control de duplicados.
 
 Cada intento se registra inicialmente como `PENDIENTE`. Después del intento
 SMTP pasa a:
@@ -205,6 +239,13 @@ El servicio utiliza el ejecutable:
   enviar-recordatorios --simular
 ```
 
+### Simulación del recordatorio de una hora
+
+```bash
+.venv/bin/python -m flask --app run:app \
+  enviar-recordatorios --anticipacion una-hora --simular
+```
+
 Consulta eventos e inscripciones y muestra los destinatarios. No abre SMTP y no
 registra correos.
 
@@ -225,7 +266,8 @@ seleccionado.
   enviar-recordatorios \
   --evento-id 1 \
   --destinatario-prueba correo-controlado@ejemplo.com \
-  --nombre-prueba Mariana
+  --nombre-prueba Mariana \
+  --anticipacion una-hora
 ```
 
 Este modo:
@@ -307,6 +349,9 @@ ejecutar todos los días a las 10:00
 El comando diario solo encuentra eventos que comienzan aproximadamente 24
 horas después. Si no encuentra ninguno, termina sin enviar correos.
 
+`0 * * * *` significa ejecutar una vez por hora, en el minuto cero. Se utiliza
+para buscar eventos que comienzan aproximadamente una hora después.
+
 ---
 
 ## 10. Zona horaria
@@ -377,17 +422,20 @@ Editar el cron del usuario que ejecutará la tarea:
 crontab -u portalpericial-curso -e
 ```
 
-Línea instalada en el servidor configurado con hora argentina:
+Líneas para el servidor configurado con hora argentina:
 
 ```cron
 0 10 * * * /usr/bin/flock -n /home/portalpericial-curso/recordatorios.lock /bin/bash -c 'cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && exec .venv/bin/python -m flask --app run:app enviar-recordatorios' >> /home/portalpericial-curso/logs/recordatorios.log 2>&1
+0 * * * * /usr/bin/flock -n /home/portalpericial-curso/recordatorios-una-hora.lock /bin/bash -c 'cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && exec .venv/bin/python -m flask --app run:app enviar-recordatorios --anticipacion una-hora' >> /home/portalpericial-curso/logs/recordatorios.log 2>&1
 ```
 
 Elementos de la línea:
 
-- `0 10 * * *`: horario;
+- `0 10 * * *`: ejecuta el recordatorio del día anterior a las 10:00;
+- `0 * * * *`: revisa cada hora el recordatorio de una hora;
 - `/usr/bin/flock -n`: evita ejecuciones simultáneas;
-- `recordatorios.lock`: archivo de exclusión de la tarea real;
+- cada tarea tiene un archivo de bloqueo diferente para no impedir que la otra
+  se ejecute;
 - `/bin/bash -c`: ejecuta el bloque de comandos;
 - `cd .../PortalPericial`: directorio desde el que se carga `.env`;
 - `.venv/bin/python`: Python del entorno virtual;
@@ -446,6 +494,7 @@ No eliminar:
 
 ```text
 /home/portalpericial-curso/recordatorios.lock
+/home/portalpericial-curso/recordatorios-una-hora.lock
 /home/portalpericial-curso/logs/recordatorios.log
 ```
 
@@ -467,6 +516,8 @@ Antes de activar cron:
 - [ ] Se confirmó el Python del entorno virtual.
 - [ ] Se confirmó que el usuario de cron puede escribir el log.
 - [ ] La prueba completa de cron con `--simular` termina sin errores.
+- [ ] El recordatorio `una-hora` tiene asunto y texto propios.
+- [ ] Las dos líneas de cron aparecen en el crontab.
 
 ---
 
