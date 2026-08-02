@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://portalpericial.com.ar/sitemap.xml
