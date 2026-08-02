@@ -49,13 +49,17 @@ enviado queda registrado en `correos`, por lo que una nueva ejecución lo omite.
 `--anticipacion una-hora` utiliza una ventana de 30 a 90 minutos y un asunto
 distinto. De esta forma, no se confunde con el recordatorio del día anterior.
 
-Para una charla el sábado a las 10:00, configurar en el servidor este `cron`
-para ejecutar la revisión todos los días a las 10:00:
+Para cubrir charlas en cualquier horario, configurar en el servidor estas dos
+revisiones horarias:
 
 ```cron
-0 10 * * * /usr/bin/flock -n /home/portalpericial-curso/recordatorios.lock /bin/bash -c 'cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && exec .venv/bin/python -m flask --app run:app enviar-recordatorios' >> /home/portalpericial-curso/logs/recordatorios.log 2>&1
+0 * * * * /usr/bin/flock -n /home/portalpericial-curso/recordatorios.lock /bin/bash -c 'cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && exec .venv/bin/python -m flask --app run:app enviar-recordatorios' >> /home/portalpericial-curso/logs/recordatorios.log 2>&1
 0 * * * * /usr/bin/flock -n /home/portalpericial-curso/recordatorios-una-hora.lock /bin/bash -c 'cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && exec .venv/bin/python -m flask --app run:app enviar-recordatorios --anticipacion una-hora' >> /home/portalpericial-curso/logs/recordatorios.log 2>&1
 ```
+
+La primera encuentra eventos entre 23,5 y 24,5 horas adelante. La segunda
+encuentra eventos entre 0,5 y 1,5 horas adelante. Al ejecutarse ambas en el
+minuto cero de cada hora, cubren charlas de cualquier horario entero.
 
 El cron pertenece al usuario `portalpericial-curso`. El servidor usa la zona
 horaria `America/Argentina/Buenos_Aires` y el servicio utiliza el entorno

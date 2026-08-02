@@ -337,20 +337,26 @@ automáticamente según una expresión de cinco campos:
 │ │ │ ┌── mes, de 1 a 12
 │ │ │ │ ┌ día de la semana, de 0 a 7
 │ │ │ │ │
-0 10 * * *
+0 * * * *
 ```
 
-`0 10 * * *` significa:
+`0 * * * *` significa:
 
 ```text
-ejecutar todos los días a las 10:00
+ejecutar en el minuto cero de cada hora
 ```
 
-El comando diario solo encuentra eventos que comienzan aproximadamente 24
-horas después. Si no encuentra ninguno, termina sin enviar correos.
+Ambos recordatorios se revisan una vez por hora. El primero busca eventos que
+comienzan aproximadamente 24 horas después y el segundo busca eventos que
+comienzan aproximadamente una hora después. Si no encuentran ninguno, terminan
+sin enviar correos.
 
-`0 * * * *` significa ejecutar una vez por hora, en el minuto cero. Se utiliza
-para buscar eventos que comienzan aproximadamente una hora después.
+Por ejemplo, para una charla del martes a las 20:00:
+
+```text
+lunes 20:00  -> recordatorio del día anterior
+martes 19:00 -> recordatorio de una hora
+```
 
 ---
 
@@ -363,19 +369,19 @@ timedatectl
 date
 ```
 
-Si el servidor usa `America/Argentina/Buenos_Aires`, las 10:00 se expresan como:
+El servidor verificado usa:
 
-```cron
-0 10 * * *
+```text
+America/Argentina/Buenos_Aires
 ```
 
-Si el servidor usa UTC, las 10:00 de Argentina corresponden a las 13:00 UTC:
+Como los cron se ejecutan cada hora, no requieren convertir una hora fija entre
+Argentina y UTC. La zona horaria sigue siendo relevante para interpretar logs,
+fechas operativas y otras tareas programadas.
 
-```cron
-0 13 * * *
-```
-
-No se debe instalar el cron hasta confirmar la zona horaria real del servidor.
+El correo siempre presenta la fecha mediante
+`America/Argentina/Buenos_Aires`, independientemente de la zona horaria del
+proceso.
 
 ---
 
@@ -425,14 +431,15 @@ crontab -u portalpericial-curso -e
 Líneas para el servidor configurado con hora argentina:
 
 ```cron
-0 10 * * * /usr/bin/flock -n /home/portalpericial-curso/recordatorios.lock /bin/bash -c 'cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && exec .venv/bin/python -m flask --app run:app enviar-recordatorios' >> /home/portalpericial-curso/logs/recordatorios.log 2>&1
+0 * * * * /usr/bin/flock -n /home/portalpericial-curso/recordatorios.lock /bin/bash -c 'cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && exec .venv/bin/python -m flask --app run:app enviar-recordatorios' >> /home/portalpericial-curso/logs/recordatorios.log 2>&1
 0 * * * * /usr/bin/flock -n /home/portalpericial-curso/recordatorios-una-hora.lock /bin/bash -c 'cd /home/portalpericial-curso/apps/CursoPeritos/PortalPericial && exec .venv/bin/python -m flask --app run:app enviar-recordatorios --anticipacion una-hora' >> /home/portalpericial-curso/logs/recordatorios.log 2>&1
 ```
 
 Elementos de la línea:
 
-- `0 10 * * *`: ejecuta el recordatorio del día anterior a las 10:00;
-- `0 * * * *`: revisa cada hora el recordatorio de una hora;
+- ambas líneas usan `0 * * * *` para revisar cada hora;
+- la primera ejecuta el recordatorio del día anterior;
+- la segunda ejecuta el recordatorio de una hora;
 - `/usr/bin/flock -n`: evita ejecuciones simultáneas;
 - cada tarea tiene un archivo de bloqueo diferente para no impedir que la otra
   se ejecute;
