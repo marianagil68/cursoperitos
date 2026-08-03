@@ -35,6 +35,8 @@ def test_recordatorio_se_envia_una_sola_vez():
     assert "Mañana nos encontramos" in html
     assert "sábado 1 de agosto de 2026 · 10:00 hs" in html
     assert "https://zoom.example.com/reunion" in html
+    assert "+54 9 11 4412-1678" in html
+    assert "https://wa.me/5491144121678" in html
 
 
 def test_recordatorio_ya_enviado_se_omite():
@@ -455,6 +457,8 @@ def test_recordatorio_una_hora_tiene_asunto_y_texto_propios():
     assert "En una hora comenzamos" in html
     assert "en una hora comienza la charla" in html
     assert "https://zoom.example.com/reunion" in html
+    assert "+54 9 11 4412-1678" in html
+    assert "https://wa.me/5491144121678" in html
 
 
 def test_recordatorio_una_hora_no_se_confunde_con_el_del_dia_anterior():

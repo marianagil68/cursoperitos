@@ -484,6 +484,10 @@ class CorreoService:
                     <p style="text-align:center;margin:28px 0">
                         <a href="{urlacceso}" style="display:inline-block;background:#0b63ce;color:white;text-decoration:none;padding:14px 24px;border-radius:9px;font-weight:bold">INGRESAR A LA CHARLA POR ZOOM</a>
                     </p>
+                    <p>Si tenés alguna consulta o inconveniente para ingresar a la charla:</p>
+                    <p style="text-align:center;margin:20px 0 26px">
+                        <a href="https://wa.me/5491144121678" style="display:inline-block;background:#128c4a;color:white;text-decoration:none;padding:12px 20px;border-radius:9px;font-weight:bold;white-space:nowrap">WHATSAPP&nbsp;&nbsp;+54 9 11 4412-1678</a>
+                    </p>
                     <p>{configuracion['cierre']}</p>
                     <p style="margin-top:28px">Equipo de <b>Portal Pericial</b></p>
                 </div>
